@@ -1,18 +1,72 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, Clock, MapPin, PlaneLanding, Compass, Lightbulb, Users } from "lucide-react";
+import { Calendar, Clock, MapPin, PlaneLanding, Compass, Lightbulb, Users, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface TravelPlannerProps {
   className?: string;
+  whiteboardRef?: React.RefObject<HTMLDivElement>;
+  onWhiteboardSave?: (snapshot: any) => Promise<void>;
 }
 
-const TravelPlanner: React.FC<TravelPlannerProps> = ({ className }) => {
+const TravelPlanner: React.FC<TravelPlannerProps> = ({ className, whiteboardRef, onWhiteboardSave }) => {
   const [tripName, setTripName] = useState("Paris Adventure");
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  
+  const handleSaveTrip = async () => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      
+      // Save the trip first
+      const { data: tripData, error: tripError } = await supabase
+        .from('trips')
+        .insert([
+          { name: tripName, user_id: user.id }
+        ])
+        .select()
+        .single();
+        
+      if (tripError) throw tripError;
+      
+      // If we have a whiteboard to save and a trip ID
+      if (onWhiteboardSave && tripData) {
+        // The editor instance will be available via onWhiteboardSave
+        await onWhiteboardSave(tripData.id);
+      }
+      
+      toast({
+        title: "Trip saved!",
+        description: "Your trip has been saved successfully.",
+      });
+      
+      // Navigate to the My Trips page
+      navigate('/my-trips');
+    } catch (error: any) {
+      console.error('Error saving trip:', error);
+      toast({
+        title: "Error saving trip",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
   
   return (
     <div className={cn("w-full space-y-6 animate-slide-in", className)}>
@@ -32,13 +86,23 @@ const TravelPlanner: React.FC<TravelPlannerProps> = ({ className }) => {
         </div>
         
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2"
+            onClick={() => navigate('/my-trips')}
+          >
             <Users className="h-4 w-4" />
-            <span>Share</span>
+            <span>My Trips</span>
           </Button>
-          <Button size="sm" className="gap-2">
-            <PlaneLanding className="h-4 w-4" />
-            <span>Save Trip</span>
+          <Button 
+            size="sm" 
+            className="gap-2"
+            onClick={handleSaveTrip}
+            disabled={saving}
+          >
+            <Save className="h-4 w-4" />
+            <span>{saving ? "Saving..." : "Save Trip"}</span>
           </Button>
         </div>
       </div>
@@ -49,6 +113,7 @@ const TravelPlanner: React.FC<TravelPlannerProps> = ({ className }) => {
           <TabsTrigger value="itinerary">Itinerary</TabsTrigger>
           <TabsTrigger value="checklist">Checklist</TabsTrigger>
         </TabsList>
+        
         <TabsContent value="planning" className="space-y-4 mt-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="overflow-hidden">
