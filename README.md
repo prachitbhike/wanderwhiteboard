@@ -1,3 +1,3 @@
-Wander Whiteboard
+Wander Whiteboard by Prachit Bhike
 
-Created using the wonderful Tldraw sdk!
+Using TLDraw sdk and Lovable!
